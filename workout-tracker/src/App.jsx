@@ -36,15 +36,16 @@ function App() {
   };
 
   const handleExerciseChange = async (e) => {
-    const selectedExercise = capitalizeFirstLetter(e.target.value);
+    const selectedExercise = e.target.value.trim();
+    const normalized = capitalizeFirstLetter(selectedExercise);;
     setForm(prevForm => ({
       ...prevForm,
       exercise: selectedExercise
     }));
     
     // Fetch preset only if the exercise exists in the list
-    if (exercises.includes(selectedExercise)) {
-      await fetchPreset(selectedExercise);
+    if (exercises.includes(normalized)) {
+      await fetchPreset(normalized);
     }
   };
 
@@ -100,11 +101,10 @@ function App() {
     }
   };
 
-  
-
   const fetchPreset = async (exerciseName) => {
     try {
       const res = await axios.get(`http://127.0.0.1:8000/preset/${exerciseName}`);
+
       setForm(prevForm => ({
         ...prevForm,
         sets: res.data.sets,
@@ -143,6 +143,33 @@ function App() {
       console.error('Error fetching workouts:', err);
     }
   };
+
+  const deleteWorkout = async (date) => {
+    const confirmed = window.confirm(`Are you sure you want to delete all workouts on ${date}?`);
+    if (!confirmed) return;
+  
+    try {
+      await axios.delete(`http://127.0.0.1:8000/workouts/by_date/${date}`);
+      fetchWorkouts();  // Refresh list
+    } catch (err) {
+      console.error("Failed to delete workouts by date:", err);
+    }
+  };
+
+  const deleteExercise = async (id) => {
+    const confirmed = window.confirm("Are you sure you want to delete this exercise?");
+    if (!confirmed) return;
+    console.log("Trying to delete exercise with ID:", id);  // ← ADD THIS
+
+    try {
+      await axios.delete(`http://127.0.0.1:8000/workouts/${id}`);
+      fetchWorkouts();  // Refresh list
+    } catch (err) {
+      console.error("Failed to delete workout:", err);
+    }
+  };
+  
+  
 
   return (
     <div style={{ padding: '2rem' }}>
@@ -210,6 +237,12 @@ function App() {
                   </li>
                 ))}
               </ul>
+              <button
+                onClick={() => deleteWorkout(date)}  // Group delete by date
+                style={{ marginBottom: '1rem', color: 'red' }}
+              >
+                Delete Workouts for {date}
+              </button>
             </div>
           ))
         ) : (
@@ -217,6 +250,12 @@ function App() {
           filteredWorkouts.map((workout, index) => (
             <li key={index}>
               {workout.exercise} - {workout.sets} sets of {workout.reps} reps at {workout.weight} kg on {new Date(workout.date).toLocaleString()}
+              <button
+                onClick={() => deleteExercise(workout.id)}  // Correct: pass name
+                style={{ marginLeft: '10px', color: 'red' }}
+              >
+                Delete Exercise
+              </button>
             </li>
           ))
         )}
