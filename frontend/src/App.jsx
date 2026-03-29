@@ -9,18 +9,18 @@ function capitalizeFirstLetter(string) {
 }
 
 function App() {
-  const [form, setForm] = useState({
-    exercise: '',
-    sets: 1,
-    reps: 1,
-    weight: 0.1,
-    date: new Date().toISOString().slice(0, 16)  // Default to current date and time (YYYY-MM-DDTHH:mm)
-  });
+  const [workout, setWorkout] = useState({
+  date: new Date().toISOString().slice(0, 16),
+  exercises: [
+    { exercise: '', sets: 1, reps: 1, weight: 0.1 }
+  ]
+});
 
 
 
   const [message, setMessage] = useState('');
   const [workouts, setWorkouts] = useState([]);  // State to store workouts
+  const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [exercises, setExercises] = useState([]);  // List of exercises
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10)); // Store the date part (YYYY-MM-DD)
   const [viewAll, setViewAll] = useState(false);  // State to toggle between views (today's workouts or all workouts)
@@ -35,67 +35,83 @@ function App() {
     setSelectedDate(e.target.value); // Update the selected date
   };
 
-  const handleExerciseChange = async (e) => {
-    const selectedExercise = e.target.value.trim();
-    const normalized = capitalizeFirstLetter(selectedExercise);;
-    setForm(prevForm => ({
-      ...prevForm,
-      exercise: selectedExercise
+  const handleExerciseChange = (index, field, value) => {
+    const updated = [...workout.exercises];
+    updated[index][field] = value;
+
+    setWorkout(prev => ({
+      ...prev,
+      exercises: updated
     }));
-    
-    // Fetch preset only if the exercise exists in the list
-    if (exercises.includes(normalized)) {
-      await fetchPreset(normalized);
-    }
   };
 
+  const addExercise = () => {
+    setWorkout(prev => ({
+      ...prev,
+      exercises: [
+        ...prev.exercises,
+        { exercise: '', sets: 1, reps: 1, weight: 0.1 }
+      ]
+    }));
+  };
+
+  const removeExercise = (index) => {
+    setWorkout(prev => ({
+      ...prev,
+      exercises: prev.exercises.filter((_, i) => i !== index)
+    }));
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (form.sets <= 0 || form.reps <= 0 || form.weight <= 0) {
+    if (workout.sets <= 0 || workout.reps <= 0 || workout.weight <= 0) {
       setMessage("Please enter positive values for sets, reps, and weight.");
       return;
     }
     try {
-      if (!exercises.includes(capitalizeFirstLetter(form.exercise))) {
-        const shouldSave = window.confirm(`"${capitalizeFirstLetter(form.exercise)}" is a new exercise. Save it to your list?`);
-        if (shouldSave) {
-          await axios.post('http://127.0.0.1:8000/exercises', {
-            exercise: capitalizeFirstLetter(form.exercise)
-          }, {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-          await fetchExercises(); // Refresh the exercises list after adding
-        }}
+      await axios.post('http://127.0.0.1:8000/workout', workout);
 
-      const res = await axios.post('http://127.0.0.1:8000/workout', {
-        date: form.date,
-        exercises: [
-          {
-            exercise: form.exercise,
-            sets: parseInt(form.sets),
-            reps: parseInt(form.reps),
-            weight: parseFloat(form.weight)
-          }
-        ]
+      setMessage("Workout saved!");
+
+      setWorkout({
+        date: new Date().toISOString().slice(0, 16),
+        exercises: [{ exercise: '', sets: 1, reps: 1, weight: 0.1 }]
       });
-      setMessage(res.data.message);
-      setForm({ exercise: '', sets: 1, reps: 1, weight: 0.1, date: new Date().toISOString().slice(0, 16) });
-      fetchWorkouts();  // Refresh the list after adding a workout
+
+      await fetchWorkouts();
     } catch (err) {
       console.error(err);
       setMessage('Error logging workout');
     }
   };
 
-  const fetchExercises = async () => {
+  const fetchWorkouts = async () => {
     try {
-      const res = await axios.get('http://127.0.0.1:8000/exercises');
-      setExercises(res.data);  // Set the exercises to state
+      const res = await axios.get('http://127.0.0.1:8000/workouts');
+      setWorkouts(res.data);
     } catch (err) {
-      console.error('Error fetching exercises:', err);
+      console.error('Error fetching workouts:', err);
+    }
+  };
+
+  const [editingWorkout, setEditingWorkout] = useState(null); // stores the workout being edited
+
+  const startEditing = (workout) => {
+    setEditingWorkout(workout);
+    setForm({
+      date: workout.date,
+      exercises: workout.exercises.map(ex => ({ ...ex }))
+    });
+  };
+
+  const finishEditing = async () => {
+    try {
+      await axios.put(`http://127.0.0.1:8000/workout/${editingWorkout.id}`, form);
+      fetchWorkouts();
+      setEditingWorkout(null);
+    } catch (err) {
+      console.error("Failed to save workout:", err);
     }
   };
 
@@ -114,153 +130,167 @@ function App() {
     }
   };
 
-   // Filter workouts by the selected date
-  const filteredWorkouts = workouts.filter((workout) =>
-      workout.date.slice(0, 10) === selectedDate
-    );
-  // Group workouts by date for the "All Workouts" view
-  const groupedWorkouts = workouts.reduce((acc, workout) => {
-    const workoutDate = workout.date.slice(0, 10); // Extract date part (YYYY-MM-DD)
-    if (!acc[workoutDate]) {
-      acc[workoutDate] = [];
-    }
-    acc[workoutDate].push(workout);
-    return acc;
-  }, {});
+  const deleteWorkout = async (id) => {
+    const confirmed = window.confirm("Delete this workout?");
+    if (!confirmed) return;
 
-    useEffect(() => {
-      fetchExercises();
+    try {
+      await axios.delete(`http://127.0.0.1:8000/workout/${id}`);
       fetchWorkouts();
-    }, []);
-
-  const fetchWorkouts = async () => {
-    try {
-      const res = await axios.get('http://127.0.0.1:8000/workouts');
-      setWorkouts(res.data);  // Set the workouts to state
-    } catch (err) {
-      console.error('Error fetching workouts:', err);
-    }
-  };
-
-  const deleteWorkout = async (date) => {
-    const confirmed = window.confirm(`Are you sure you want to delete all workouts on ${date}?`);
-    if (!confirmed) return;
-  
-    try {
-      await axios.delete(`http://127.0.0.1:8000/exercise/${id}`);
-      fetchWorkouts();  // Refresh list
-    } catch (err) {
-      console.error("Failed to delete workouts by date:", err);
-    }
-  };
-
-  const deleteExercise = async (id) => {
-    const confirmed = window.confirm("Are you sure you want to delete this exercise?");
-    if (!confirmed) return;
-    console.log("Trying to delete exercise with ID:", id);  // ← ADD THIS
-
-    try {
-      await axios.delete(`http://127.0.0.1:8000/workouts/${id}`);
-      fetchWorkouts();  // Refresh list
     } catch (err) {
       console.error("Failed to delete workout:", err);
     }
   };
-  
-  
+
+  useEffect(() => {
+    fetchWorkouts();
+  }, []);
+
 
   return (
     <div style={{ padding: '2rem' }}>
-      <h1>Workout Logger</h1>
-
+      <h1>Workout Tracker</h1>
       <form onSubmit={handleSubmit}>
-        <input
-          list="exercise-list"
-          name="exercise"
-          placeholder="Exercise"
-          value={form.exercise}
-          onChange={handleChange}
-          required
-        />
-        <datalist id="exercise-list">
-          {exercises.map((exercise, index) => (
-            <option key={index} value={exercise} />
-          ))}
-        </datalist>
 
-        <label>Sets:</label>
-        <input name="sets" value={form.sets} onChange={handleChange} type="number" min="1" required />
-        <label>Reps:</label>
-        <input name="reps" value={form.reps} onChange={handleChange} type="number" min="1" required />
-        <label>Weight (kg):</label>
-        <input
-          name="weight"
-          value={form.weight}
-          onChange={handleChange}
-          type="number"
-          min="0.1"
-          required
-          step="0.1"
-        />
-        <input name="date" type="datetime-local" value={form.date} onChange={handleChange} />
-        <button type="submit">Log Workout</button>
-      </form>
+      <h3>Exercises</h3>
+
+      {workout.exercises.map((ex, index) => (
+        <div key={index} style={{ display: "flex", alignItems: "center", border: '1px solid #ccc',
+          padding: '10px', gap: "10px", marginBottom: "10px"
+         }}>
+
+          <input
+            placeholder="Exercise"
+            value={ex.exercise}
+            onChange={(e) => handleExerciseChange(index, 'exercise', e.target.value)}
+            required
+          />
+
+          <label>Sets:</label>
+          <input
+            type="number"
+            value={ex.sets}
+            onChange={(e) => handleExerciseChange(index, 'sets', e.target.value)}
+            min="1"
+            required
+          />
+
+          <label>Reps:</label>
+          <input
+            type="number"
+            value={ex.reps}
+            onChange={(e) => handleExerciseChange(index, 'reps', e.target.value)}
+            min="1"
+            required
+          />
+
+          <label>Weight:</label>
+          <input
+            type="number"
+            value={ex.weight}
+            onChange={(e) => handleExerciseChange(index, 'weight', e.target.value)}
+            min="0.1"
+            step="0.1"
+            required
+          />
+        <button
+          type="button"
+          onClick={() => removeExercise(index)}
+          style={{ marginTop: '5px', marginLeft: '10px', color: 'red' }}
+        > ❌
+        </button>
+        </div>
+      ))}
+
+      <button type="button" onClick={addExercise}>
+        ➕
+      </button>
+
+      <br /><br />
+
+      <button type="submit">
+        Log Workout
+      </button>
+
+      <label>Date:</label>
+      <input
+        type="datetime-local"
+        value={workout.date}
+        onChange={(e) =>
+          setWorkout({ ...workout, date: e.target.value })
+        }
+      />
+
+    </form>
 
       {message && <p>{message}</p>}
 
       {/* Date picker to select the day */}
+      {/*
       <label>Select Date:</label>
       <input
         type="date"
         value={selectedDate}
         onChange={handleDateChange}
       />
+      */}
 
       {/* Button to toggle between today's workouts and all workouts */}
+      {/*
       <button onClick={() => setViewAll(!viewAll)}>
         {viewAll ? 'View Today\'s Workouts' : 'View All Workouts'}
       </button>
+      */}
 
-      <h2>{viewAll ? 'All Workouts' : `Workouts on ${selectedDate}`}</h2>
-      <ul>
-        {viewAll ? (
-          // Display all workouts grouped by date
-          Object.keys(groupedWorkouts).map((date, index) => (
-            <div key={index}>
-              <h3>{date}</h3>
-              <ul>
-                {groupedWorkouts[date].map((workout, index) => (
-                  <li key={index}>
-                    {workout.exercises.map((ex, i) => (
-                    <div key={i}>
-                      {ex.exercise} - {ex.sets} sets of {ex.reps} reps at {ex.weight} kg
-                    </div>
-                  ))}</li>
-                ))}
-              </ul>
-              <button
-                onClick={() => deleteWorkout(date)}  // Group delete by date
-                style={{ marginBottom: '1rem', color: 'red' }}
-              >
-                Delete Workouts for {date}
-              </button>
+      {/* OVERVIEW (list of workouts) */}
+      {!selectedWorkout && (
+        <div>
+          <h2>All Workouts</h2>
+          <ul>
+            {workouts.map((workout) => (
+              <li key={workout.id}>
+                <button onClick={() => setSelectedWorkout(workout)}>
+                  Workout {new Date(workout.date).toLocaleDateString()} ({workout.exercises.length} exercises)
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* DETAIL VIEW (single workout) */}
+      {selectedWorkout && (
+        <div>
+          <h2>
+            Workout {new Date(selectedWorkout.date).toLocaleDateString()}
+          </h2>
+
+          {selectedWorkout.exercises.map((ex, i) => (
+            <div key={i}>
+              {ex.exercise} — {ex.sets} × {ex.reps} @ {ex.weight} kg
             </div>
-          ))
-        ) : (
-          // Display today's workouts
-          filteredWorkouts.map((workout, index) => (
-            <li key={index}>
-              {workout.exercise} - {workout.sets} sets of {workout.reps} reps at {workout.weight} kg on {new Date(workout.date).toLocaleString()}
-              <button
-                onClick={() => deleteExercise(ex.id)}  // Correct: pass name
-                style={{ marginLeft: '10px', color: 'red' }}
-              >
-                Delete Exercise
-              </button>
-            </li>
-          ))
-        )}
-      </ul>
+          ))}
+
+          <br />
+
+          <button onClick={() => setSelectedWorkout(null)}>
+            ← Back
+          </button>
+
+          <button onClick={() => startEditing(selectedWorkout)}>
+            Edit
+          </button>
+
+          <button
+            onClick={() => {
+              deleteWorkout(selectedWorkout.id);
+              setSelectedWorkout(null);
+            }}
+            style={{ color: 'red', marginLeft: '10px' }}
+          >
+            Delete Workout
+          </button>
+        </div>
+      )}
     </div>
   );
 }
