@@ -159,3 +159,35 @@ def delete_workout(workout_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": f"Workout {workout_id} deleted"}
+
+@app.put("/workout/{workout_id}")
+def update_workout(workout_id: int, workout_data: WorkoutCreate, db: Session = Depends(get_db)):
+    
+    # 1. Find workout
+    workout = db.query(Workout).filter(Workout.id == workout_id).first()
+    if not workout:
+        raise HTTPException(status_code=404, detail="Workout not found")
+
+    # 2. Update date
+    workout.date = workout_data.date
+
+    # 3. Delete old exercises
+    db.query(ExerciseEntryDB).filter(
+        ExerciseEntryDB.workout_id == workout_id
+    ).delete()
+
+    # 4. Add updated exercises
+    for ex in workout_data.exercises:
+        db_ex = ExerciseEntryDB(
+            workout_id=workout.id,
+            exercise=ex.exercise.strip().title(),
+            sets=ex.sets,
+            reps=ex.reps,
+            weight=ex.weight
+        )
+        db.add(db_ex)
+
+    db.commit()
+    db.refresh(workout)
+
+    return {"message": "Workout updated!"}

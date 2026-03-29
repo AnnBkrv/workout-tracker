@@ -16,24 +16,11 @@ function App() {
   ]
 });
 
-
-
   const [message, setMessage] = useState('');
   const [workouts, setWorkouts] = useState([]);  // State to store workouts
   const [selectedWorkout, setSelectedWorkout] = useState(null);
-  const [exercises, setExercises] = useState([]);  // List of exercises
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10)); // Store the date part (YYYY-MM-DD)
-  const [viewAll, setViewAll] = useState(false);  // State to toggle between views (today's workouts or all workouts)
+  const [isEditing, setIsEditing] = useState(false);
 
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
-  };
-
-  const handleDateChange = (e) => {
-    setSelectedDate(e.target.value); // Update the selected date
-  };
 
   const handleExerciseChange = (index, field, value) => {
     const updated = [...workout.exercises];
@@ -92,26 +79,6 @@ function App() {
       setWorkouts(res.data);
     } catch (err) {
       console.error('Error fetching workouts:', err);
-    }
-  };
-
-  const [editingWorkout, setEditingWorkout] = useState(null); // stores the workout being edited
-
-  const startEditing = (workout) => {
-    setEditingWorkout(workout);
-    setForm({
-      date: workout.date,
-      exercises: workout.exercises.map(ex => ({ ...ex }))
-    });
-  };
-
-  const finishEditing = async () => {
-    try {
-      await axios.put(`http://127.0.0.1:8000/workout/${editingWorkout.id}`, form);
-      fetchWorkouts();
-      setEditingWorkout(null);
-    } catch (err) {
-      console.error("Failed to save workout:", err);
     }
   };
 
@@ -208,11 +175,12 @@ function App() {
 
       <br /><br />
 
-      <button type="submit">
+      <button type="submit"
+        style={{ marginRight: '5px'}}>
         Log Workout
       </button>
 
-      <label>Date:</label>
+      <label style={{ padding: '5px'}}>Date:</label>
       <input
         type="datetime-local"
         value={workout.date}
@@ -241,56 +209,185 @@ function App() {
         {viewAll ? 'View Today\'s Workouts' : 'View All Workouts'}
       </button>
       */}
-
-      {/* OVERVIEW (list of workouts) */}
       {!selectedWorkout && (
         <div>
           <h2>All Workouts</h2>
+
           <ul>
             {workouts.map((workout) => (
               <li key={workout.id}>
                 <button onClick={() => setSelectedWorkout(workout)}>
-                  Workout {new Date(workout.date).toLocaleDateString()} ({workout.exercises.length} exercises)
+                  Workout {new Date(workout.date).toLocaleDateString()}
                 </button>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {/* DETAIL VIEW (single workout) */}
       {selectedWorkout && (
-        <div>
-          <h2>
-            Workout {new Date(selectedWorkout.date).toLocaleDateString()}
-          </h2>
+      <div>
+        <h2>
+          Workout {new Date(selectedWorkout.date).toLocaleDateString()}
+        </h2>
 
-          {selectedWorkout.exercises.map((ex, i) => (
-            <div key={i}>
-              {ex.exercise} — {ex.sets} × {ex.reps} @ {ex.weight} kg
-            </div>
-          ))}
+        {/* Header for edit mode */}
+        {isEditing && (
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px',
+              fontWeight: 'bold',
+              marginBottom: '5px'
+            }}
+          >
+            <div style={{ width: '120px' }}>Exercise</div>
+            <div style={{ width: '60px' }}>Sets</div>
+            <div style={{ width: '60px' }}>Reps</div>
+            <div style={{ width: '80px' }}>Weight</div>
+            <div style={{ width: '30px' }}></div> {/* for ❌ */}
+          </div>
+        )}
 
-          <br />
+        {selectedWorkout.exercises.map((ex, i) => (
+          <div key={i} style={{ marginBottom: '10px', display : "flex", gap : "10px", alignItems : "center" }}>
+            {isEditing ? (
+              <>
+                <input placeholder='Exercise'
+                  style={{ width: '120px' }}
+                  value={ex.exercise}
+                  onChange={(e) => {
+                    const updated = [...selectedWorkout.exercises];
+                    updated[i].exercise = e.target.value;
+                    setSelectedWorkout({ ...selectedWorkout, exercises: updated });
+                  }}
+                />
+                <input placeholder='Sets'
+                  type="number"
+                  style={{ width: '60px' }}
+                  value={ex.sets}
+                  onChange={(e) => {
+                    const updated = [...selectedWorkout.exercises];
+                    updated[i].sets = e.target.value;
+                    setSelectedWorkout({ ...selectedWorkout, exercises: updated });
+                  }}
+                />
+                <input placeholder='Reps'
+                  style={{ width: '60px' }}
+                  type="number"
+                  value={ex.reps}
+                  onChange={(e) => {
+                    const updated = [...selectedWorkout.exercises];
+                    updated[i].reps = e.target.value;
+                    setSelectedWorkout({ ...selectedWorkout, exercises: updated });
+                  }}
+                />
+                <input placeholder='weight'
+                  style={{ width: '80px' }}
+                  type="number"
+                  value={ex.weight}
+                  onChange={(e) => {
+                    const updated = [...selectedWorkout.exercises];
+                    updated[i].weight = e.target.value;
+                    setSelectedWorkout({ ...selectedWorkout, exercises: updated });
+                  }}
+                />
+              {/* REMOVE BUTTON */}
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = selectedWorkout.exercises.filter((_, index) => index !== i);
+                  setSelectedWorkout({ ...selectedWorkout, exercises: updated });
+                }}
+                style={{ color: 'red' }}
+              >
+                ❌
+              </button>
+              </>
+              
+            ) : (
+              <div>
+                {ex.exercise} — {ex.sets} × {ex.reps} @ {ex.weight} kg
+              </div>
+            )}
+            
+          </div>
+        ))}
+        {/* Add button */}
+        {isEditing && (
+        <button
+          type="button"
+          onClick={() => {
+            const newExercise = {
+              exercise: '',
+              sets: 1,
+              reps: 1,
+              weight: 0.1
+            };
 
-          <button onClick={() => setSelectedWorkout(null)}>
-            ← Back
-          </button>
+            setSelectedWorkout({
+              ...selectedWorkout,
+              exercises: [...selectedWorkout.exercises, newExercise]
+            });
+          }}
+          style={{ marginTop: '10px', marginBottom : "10px" }}
+        >
+          ➕ Add Exercise
+        </button>
+      )}
+        
+        <br />
 
-          <button onClick={() => startEditing(selectedWorkout)}>
+        <button onClick={() => setSelectedWorkout(null)}>
+          ← Back
+        </button>
+
+        {/* Delete */}
+        <button
+          onClick={() => deleteWorkout(selectedWorkout.id)}
+          style={{ marginLeft: '10px', color: 'red' }}
+        >
+          Delete Workout
+        </button>
+
+        {/* Edit */}
+        {!isEditing ? (
+          <button
+            onClick={() => setIsEditing(true)}
+            style={{ marginLeft: '10px' }}
+          >
             Edit
           </button>
-
-          <button
-            onClick={() => {
-              deleteWorkout(selectedWorkout.id);
-              setSelectedWorkout(null);
-            }}
-            style={{ color: 'red', marginLeft: '10px' }}
-          >
-            Delete Workout
-          </button>
-        </div>
-      )}
+        ) : (
+          <>
+          {/* Save Button */}
+            <button
+              onClick={async () => {
+                try {
+                  await axios.put(
+                    `http://127.0.0.1:8000/workout/${selectedWorkout.id}`,
+                    selectedWorkout
+                  );
+                  setIsEditing(false);
+                  await fetchWorkouts();
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+              style={{ marginLeft: '10px' }}
+            >
+              Save
+            </button>
+          {/* Cancel button */}
+            <button
+              onClick={() => setIsEditing(false)}
+              style={{ marginLeft: '10px' }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+    )}
     </div>
   );
 }
