@@ -97,6 +97,32 @@ function App() {
     }
   };
 
+  const groupByMonth = (workouts) => {
+    const grouped = {};
+
+    workouts.forEach(workout => {
+      const date = new Date(workout.date);
+
+      const year = date.getFullYear();
+      const month = date.getMonth(); // 0–11
+
+      const key = `${year}-${month}`;
+
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+
+      grouped[key].push(workout);
+    });
+
+    return grouped;
+  };
+  const groupedWorkouts = groupByMonth(workouts);
+
+  const sortedMonths = Object.keys(groupedWorkouts).sort((a, b) => {
+    return new Date(b) - new Date(a);
+  });
+
   const deleteWorkout = async (id) => {
     const confirmed = window.confirm("Delete this workout?");
     if (!confirmed) return;
@@ -104,6 +130,10 @@ function App() {
     try {
       await axios.delete(`http://127.0.0.1:8000/workout/${id}`);
       fetchWorkouts();
+      // go back to "All Workouts" view
+      if (selectedWorkout?.id === id) {
+        setSelectedWorkout(null);
+      }
     } catch (err) {
       console.error("Failed to delete workout:", err);
     }
@@ -174,7 +204,7 @@ function App() {
       </button>
 
       <br /><br />
-
+      {/* log workout button */}
       <button type="submit"
         style={{ marginRight: '5px'}}>
         Log Workout
@@ -193,35 +223,43 @@ function App() {
 
       {message && <p>{message}</p>}
 
-      {/* Date picker to select the day */}
-      {/*
-      <label>Select Date:</label>
-      <input
-        type="date"
-        value={selectedDate}
-        onChange={handleDateChange}
-      />
-      */}
-
-      {/* Button to toggle between today's workouts and all workouts */}
-      {/*
-      <button onClick={() => setViewAll(!viewAll)}>
-        {viewAll ? 'View Today\'s Workouts' : 'View All Workouts'}
-      </button>
-      */}
       {!selectedWorkout && (
         <div>
           <h2>All Workouts</h2>
 
-          <ul>
-            {workouts.map((workout) => (
-              <li key={workout.id}>
-                <button onClick={() => setSelectedWorkout(workout)}>
-                  Workout {new Date(workout.date).toLocaleDateString()}
-                </button>
-              </li>
-            ))}
-          </ul>
+          {sortedMonths.map((monthKey) => {
+            const workoutsInMonth = groupedWorkouts[monthKey];
+
+            const [year, month] = monthKey.split("-");
+            const date = new Date(year, month);
+
+            const monthName = date.toLocaleString("default", {
+              month: "long",
+              year: "numeric",
+            });
+
+            return (
+              <div key={monthKey}>
+                <h3>{monthName}</h3>
+
+                <ul>
+                  {workoutsInMonth
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .map((workout) => (
+                      <li key={workout.id}>
+                        <button
+                          style={{ marginBottom: "10px" }}
+                          onClick={() => setSelectedWorkout(workout)}
+                        >
+                          Workout{" "}
+                          {new Date(workout.date).toLocaleDateString()}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       )}
       {selectedWorkout && (
