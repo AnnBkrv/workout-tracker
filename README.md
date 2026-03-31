@@ -13,10 +13,6 @@ Workout detail view with all exercises for that session
 
 Dynamic updates: UI updates automatically after adding or deleting a workout
 
-Responsive design: works on desktop and mobile
-
-Simple and intuitive UI for easy use
-
 ## **Tech Stack**
 
 Frontend: React, Axios
